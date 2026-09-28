@@ -2,6 +2,67 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/Users");
 
+const COMMON_PASSWORDS = [
+  "password",
+  "123456",
+  "qwerty",
+  "admin",
+  "welcome",
+  "letmein",
+];
+
+const normalizePassword = (password) =>
+  password
+    .toLowerCase()
+    .replace(/[4@]/g, "a")
+    .replace(/[3]/g, "e")
+    .replace(/[1!]/g, "i")
+    .replace(/[0]/g, "o")
+    .replace(/[5$]/g, "s")
+    .replace(/[7]/g, "t")
+    .replace(/[^a-z0-9]/g, "");
+
+const getPasswordError = (password, username, email) => {
+  if (password.length < 12) {
+    return "Password must be at least 12 characters";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password must include an uppercase letter";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must include a lowercase letter";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password must include a number";
+  }
+  if (!/[!@#$%&*]/.test(password)) {
+    return "Password must include a symbol: ! @ # $ % & *";
+  }
+
+  const personalInfo = [username, email.split("@")[0]]
+    .filter((value) => value.length >= 3)
+    .map((value) => value.toLowerCase());
+  const lowerPassword = password.toLowerCase();
+  if (personalInfo.some((value) => lowerPassword.includes(value))) {
+    return "Password must not contain your username or email";
+  }
+
+  const normalized = normalizePassword(password);
+  if (
+    COMMON_PASSWORDS.some(
+      (commonPassword) =>
+        normalized.includes(commonPassword) ||
+        lowerPassword.includes(commonPassword),
+    ) ||
+    /asdfgh|qwerty|zxcvbn|1234|2345|3456|4567|5678|6789/i.test(password) ||
+    /(.)\1{3,}/i.test(password)
+  ) {
+    return "Password must not use common words or simple patterns";
+  }
+
+  return null;
+};
+
 const generateToken = (user) =>
   jwt.sign({ userId: user._id, email: user.email }, process.env.JWT_SECRET, {
     expiresIn: "1h",
@@ -20,10 +81,9 @@ exports.register = async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
-    if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ error: "Password must be at least 6 characters" });
+    const passwordError = getPasswordError(password, username, email);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const existing = await User.findOne({ $or: [{ email }, { username }] });
