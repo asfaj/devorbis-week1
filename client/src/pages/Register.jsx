@@ -2,8 +2,27 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+const COMMON_PASSWORDS = [
+  "password",
+  "123456",
+  "qwerty",
+  "admin",
+  "welcome",
+  "letmein",
+];
+
+const validateEmail = (email) => {
+  if (!EMAIL_FORMAT.test(email)) {
+    return "Enter a valid email address, e.g. name@example.com";
+  }
+
+  return "";
+};
+
 const getPasswordError = (password, username, email) => {
-  if (password.length < 12) return "Use at least 12 characters.";
+  if (password.length < 8) return "Use at least 8 characters.";
+  if (password.length > 72) return "Use no more than 72 characters.";
   if (!/[A-Z]/.test(password)) return "Add an uppercase letter.";
   if (!/[a-z]/.test(password)) return "Add a lowercase letter.";
   if (!/[0-9]/.test(password)) return "Add a number.";
@@ -27,12 +46,15 @@ const getPasswordError = (password, username, email) => {
     .replace(/[5$]/g, "s")
     .replace(/[7]/g, "t")
     .replace(/[^a-z0-9]/g, "");
+
   if (
-    /password|123456|qwerty|admin|welcome|letmein/.test(normalized) ||
-    /asdfgh|qwerty|zxcvbn|1234|2345|3456|4567|5678|6789/i.test(password) ||
-    /(.)\1{3,}/i.test(password)
+    COMMON_PASSWORDS.some(
+      (commonPassword) =>
+        normalized.includes(commonPassword) ||
+        password.toLowerCase().includes(commonPassword),
+    )
   ) {
-    return "Avoid common words and simple patterns.";
+    return "Avoid common words and weak patterns.";
   }
 
   return "";
@@ -46,19 +68,29 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const passwordError = getPasswordError(password, username, email);
+    setEmailError("");
+    const cleanedEmail = email.trim().toLowerCase();
+    const emailValidationError = validateEmail(cleanedEmail);
+    if (emailValidationError) {
+      setEmailError(emailValidationError);
+      setError(emailValidationError);
+      return;
+    }
+
+    const passwordError = getPasswordError(password, username, cleanedEmail);
     if (passwordError) {
       setError(passwordError);
       return;
     }
     setLoading(true);
     try {
-      await register(username, email, password);
+      await register(username, cleanedEmail, password);
       navigate("/");
     } catch (err) {
       setError(err.message);
@@ -118,11 +150,19 @@ export default function Register() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailError("");
+                }}
                 autoComplete="email"
                 required
               />
             </div>
+            {emailError && (
+              <p className="error" role="alert">
+                {emailError}
+              </p>
+            )}
           </div>
 
           <div className="form-field">
@@ -151,7 +191,7 @@ export default function Register() {
               </button>
             </div>
             <p className="password-hint">
-              Use 12-72 characters with uppercase, lowercase, a number, and a
+              Use 8+ characters with uppercase, lowercase, a number, and a
               special character.
             </p>
           </div>

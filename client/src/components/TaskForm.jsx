@@ -1,11 +1,19 @@
 import { useState } from "react";
 
+const getToday = () => {
+  const today = new Date();
+  const offset = today.getTimezoneOffset();
+  return new Date(today.getTime() - offset * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+};
+
 export default function TaskForm({ initial, onSubmit, onCancel }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [status, setStatus] = useState(initial?.status || "todo");
   const [dueDate, setDueDate] = useState(
-    initial?.dueDate ? initial.dueDate.slice(0, 10) : ""
+    initial?.dueDate ? initial.dueDate.slice(0, 10) : getToday()
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -29,7 +37,7 @@ export default function TaskForm({ initial, onSubmit, onCancel }) {
         setTitle("");
         setDescription("");
         setStatus("todo");
-        setDueDate("");
+        setDueDate(getToday());
       }
     } catch (err) {
       setError(err.message);
@@ -53,11 +61,23 @@ export default function TaskForm({ initial, onSubmit, onCancel }) {
         onChange={(e) => setDescription(e.target.value)}
       />
       <div className="row">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="todo">To do</option>
-          <option value="in-progress">In progress</option>
-          <option value="done">Done</option>
-        </select>
+        <div className="status-options" role="group" aria-label="Task status">
+          {[
+            ["todo", "To do"],
+            ["in-progress", "In progress"],
+            ["done", "Done"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`status-button ${value} ${status === value ? "selected" : ""}`}
+              onClick={() => setStatus(value)}
+              aria-pressed={status === value}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <input
           type="date"
           value={dueDate}

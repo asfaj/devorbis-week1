@@ -94,6 +94,16 @@ export default function Tasks() {
                   </p>
                 )}
                 <div className="actions">
+                  {task.status !== "done" && (
+                    <button
+                      className="complete"
+                      onClick={() =>
+                        updateTask(task._id, { status: "done" }).catch(handleError)
+                      }
+                    >
+                      Mark done
+                    </button>
+                  )}
                   <button
                     className="secondary"
                     onClick={() => setEditingId(task._id)}
