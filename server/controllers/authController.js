@@ -10,6 +10,7 @@ const COMMON_PASSWORDS = [
   "welcome",
   "letmein",
 ];
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 const normalizePassword = (password) =>
   password
@@ -22,9 +23,12 @@ const normalizePassword = (password) =>
     .replace(/[7]/g, "t")
     .replace(/[^a-z0-9]/g, "");
 
-const getPasswordError = (password, username, email) => {
-  if (password.length < 12) {
-    return "Password must be at least 12 characters";
+const validatePassword = (password, username, email) => {
+  if (password.length < 8) {
+    return "Password must be at least 8 characters";
+  }
+  if (password.length > 72) {
+    return "Password must be at most 72 characters";
   }
   if (!/[A-Z]/.test(password)) {
     return "Password must include an uppercase letter";
@@ -53,11 +57,17 @@ const getPasswordError = (password, username, email) => {
       (commonPassword) =>
         normalized.includes(commonPassword) ||
         lowerPassword.includes(commonPassword),
-    ) ||
-    /asdfgh|qwerty|zxcvbn|1234|2345|3456|4567|5678|6789/i.test(password) ||
-    /(.)\1{3,}/i.test(password)
+    )
   ) {
-    return "Password must not use common words or simple patterns";
+    return "Password must not use common words";
+  }
+
+  return null;
+};
+
+const validateEmail = (email) => {
+  if (!EMAIL_FORMAT.test(email)) {
+    return "Enter a valid email address, e.g. name@example.com";
   }
 
   return null;
@@ -81,12 +91,20 @@ exports.register = async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
-    const passwordError = getPasswordError(password, username, email);
+    const cleanedEmail = email.trim().toLowerCase();
+    const emailError = validateEmail(cleanedEmail);
+    if (emailError) {
+      return res.status(400).json({ error: emailError });
+    }
+
+    const passwordError = validatePassword(password, username, cleanedEmail);
     if (passwordError) {
       return res.status(400).json({ error: passwordError });
     }
 
-    const existing = await User.findOne({ $or: [{ email }, { username }] });
+    const existing = await User.findOne({
+      $or: [{ email: cleanedEmail }, { username }],
+    });
     if (existing) {
       return res
         .status(409)
@@ -96,7 +114,7 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
       username,
-      email,
+      email: cleanedEmail,
       password: hashedPassword,
     });
 
@@ -124,7 +142,8 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    const cleanedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanedEmail });
     const isMatch = user && (await bcrypt.compare(password, user.password));
 
     if (!isMatch) {
